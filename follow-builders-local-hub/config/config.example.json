@@ -1,0 +1,24 @@
+{
+  "databasePath": "./data/follow-builders.db",
+  "feeds": {
+    "xUrl": "https://raw.githubusercontent.com/zarazhangrui/follow-builders/main/feed-x.json",
+    "podcastsUrl": "https://raw.githubusercontent.com/zarazhangrui/follow-builders/main/feed-podcasts.json"
+  },
+  "summaries": {
+    "enabled": true,
+    "locale": "zh-CN",
+    "summaryKind": "brief",
+    "promptVersion": "2026-03-22-v6",
+    "tweetModel": "gpt-5-nano",
+    "podcastModel": "gpt-5-mini",
+    "maxTweetChars": 1800,
+    "maxPodcastChars": 40000
+  },
+  "openclaw": {
+    "mode": "none",
+    "channel": "telegram",
+    "target": "",
+    "account": "",
+    "enabled": false
+  }
+}
