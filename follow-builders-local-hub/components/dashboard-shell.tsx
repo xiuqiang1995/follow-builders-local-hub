@@ -1,29 +1,18 @@
 'use client';
 
 import { startTransition, useDeferredValue, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import type {
+  BlogPostViewRecord,
+  BuilderFeedViewRecord,
   DashboardData,
   DigestRecord,
   PodcastEpisodeViewRecord,
-  TweetViewRecord
+  TweetRecord
 } from '@/lib/types';
 
-type TabKey = 'builders' | 'podcasts' | 'digest';
-
-type BuilderGroup = {
-  handle: string;
-  name: string;
-  tweets: TweetViewRecord[];
-  count: number;
-  latestAt: string;
-};
-
-type FeedSection = {
-  key: string;
-  label: string;
-  tweets: TweetViewRecord[];
-};
+type TabKey = 'builders' | 'blogs' | 'podcasts' | 'digest';
 
 const SHANGHAI_TIMEZONE = 'Asia/Shanghai';
 
@@ -49,92 +38,10 @@ function formatTime(value: string) {
   }).format(new Date(value));
 }
 
-function formatDayKey(value: string) {
-  return new Intl.DateTimeFormat('sv-SE', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    timeZone: SHANGHAI_TIMEZONE
-  }).format(new Date(value));
-}
-
-function formatDayLabel(value: string) {
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: 'long',
-    day: 'numeric',
-    weekday: 'short',
-    timeZone: SHANGHAI_TIMEZONE
-  }).format(new Date(value));
-}
-
-function truncate(text: string, limit = 220) {
-  return text.length <= limit ? text : `${text.slice(0, limit - 1)}…`;
-}
-
-function summarizeDigest(digest: DigestRecord | null) {
-  if (!digest?.content) {
-    return [];
-  }
-
-  return digest.content
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith('#'))
-    .slice(0, 8);
-}
-
-function groupTweetsByBuilder(tweets: TweetViewRecord[]) {
-  const grouped = new Map<string, BuilderGroup>();
-
-  for (const tweet of tweets) {
-    const existing = grouped.get(tweet.builderHandle);
-    if (existing) {
-      existing.tweets.push(tweet);
-      existing.count += 1;
-      if (tweet.createdAt > existing.latestAt) {
-        existing.latestAt = tweet.createdAt;
-      }
-      continue;
-    }
-
-    grouped.set(tweet.builderHandle, {
-      handle: tweet.builderHandle,
-      name: tweet.builderName,
-      tweets: [tweet],
-      count: 1,
-      latestAt: tweet.createdAt
-    });
-  }
-
-  return Array.from(grouped.values()).sort((left, right) => {
-    if (right.count !== left.count) {
-      return right.count - left.count;
-    }
-
-    return right.latestAt.localeCompare(left.latestAt);
-  });
-}
-
-function buildFeedSections(tweets: TweetViewRecord[]) {
-  const grouped = new Map<string, FeedSection>();
-
-  for (const tweet of tweets) {
-    const key = formatDayKey(tweet.createdAt);
-    const existing = grouped.get(key);
-
-    if (existing) {
-      existing.tweets.push(tweet);
-      continue;
-    }
-
-    grouped.set(key, {
-      key,
-      label: formatDayLabel(tweet.createdAt),
-      tweets: [tweet]
-    });
-  }
-
-  return Array.from(grouped.values()).sort((left, right) => left.key.localeCompare(right.key));
+function truncate(text: string, limit = 240) {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  const chars = Array.from(normalized);
+  return chars.length <= limit ? normalized : `${chars.slice(0, limit - 1).join('')}…`;
 }
 
 function formatSyncStatus(status: string | null | undefined) {
@@ -163,7 +70,13 @@ function SummaryBox({
   emptyLabel: string;
 }) {
   if (summaryZh) {
-    return <div className="summary-box">{summaryZh}</div>;
+    return (
+      <div className="summary-box">
+        {summaryZh.split('\n').map((line, i) =>
+          line.trim() ? <p key={i}>{parseInline(line)}</p> : <br key={i} />
+        )}
+      </div>
+    );
   }
 
   if (status === 'failed') {
@@ -173,59 +86,68 @@ function SummaryBox({
   return <div className="summary-box summary-box-muted">{emptyLabel}</div>;
 }
 
-function TweetRow({
-  tweet
-}: {
-  tweet: TweetViewRecord;
-}) {
-  const summaryText =
-    tweet.summaryZh ??
-    (tweet.summaryStatus === 'failed'
-      ? '摘要生成失败，下次同步会重试。'
-      : '摘要生成中，下次同步后会出现中文摘要。');
-
+function TweetList({ tweets }: { tweets: TweetRecord[] }) {
   return (
-    <article className="feed-row">
-      <div className="feed-row-time">
-        <time dateTime={tweet.createdAt}>{formatTime(tweet.createdAt)}</time>
-        {tweet.isQuote ? <span className="feed-tag">引用帖</span> : null}
+    <div className="feed-list">
+      {tweets.map((tweet) => (
+        <article className="feed-row" key={tweet.id}>
+          <div className="feed-row-time">
+            <time dateTime={tweet.createdAt}>{formatTime(tweet.createdAt)}</time>
+            {tweet.isQuote ? <span className="feed-tag">引用帖</span> : null}
+          </div>
+
+          <div className="feed-row-body">
+            <p className="feed-row-summary">{truncate(tweet.text, 280)}</p>
+            <div className="feed-row-footer">
+              <div className="feed-row-stats" aria-label="tweet metrics">
+                <span>❤️ {tweet.likes}</span>
+                <span>🔁 {tweet.retweets}</span>
+                <span>💬 {tweet.replies}</span>
+              </div>
+
+              <div className="feed-row-actions">
+                <a href={tweet.url} rel="noreferrer" target="_blank">
+                  打开原文
+                </a>
+              </div>
+            </div>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function BuilderCard({ builder }: { builder: BuilderFeedViewRecord }) {
+  return (
+    <article className="content-card">
+      <div className="content-card-head">
+        <div>
+          <p className="section-kicker">@{builder.handle}</p>
+          <h3>{builder.name}</h3>
+        </div>
+        <p className="meta-line">{builder.tweetCount} 条新帖</p>
       </div>
 
-      <div className="feed-row-body">
-        <div className="feed-row-head">
-          <div>
-            <h3>{tweet.builderName}</h3>
-            <p>@{tweet.builderHandle}</p>
-          </div>
-        </div>
+      {builder.bio ? <p className="meta-line">{truncate(builder.bio, 140)}</p> : null}
 
-        <p className={tweet.summaryZh ? 'feed-row-summary' : 'feed-row-summary is-muted'}>
-          {truncate(summaryText)}
-        </p>
+      {builder.summaryZh || builder.summaryStatus !== 'done' ? (
+        <SummaryBox
+          summaryZh={builder.summaryZh}
+          status={builder.summaryStatus}
+          emptyLabel="Builder 摘要生成中，下次同步后会出现。"
+        />
+      ) : null}
 
-        <div className="feed-row-footer">
-          <div className="feed-row-stats" aria-label="tweet metrics">
-            <span>❤️ {tweet.likes}</span>
-            <span>🔁 {tweet.retweets}</span>
-            <span>💬 {tweet.replies}</span>
-          </div>
-
-          <div className="feed-row-actions">
-            <a href={tweet.url} rel="noreferrer" target="_blank">
-              打开原文
-            </a>
-          </div>
-        </div>
-      </div>
+      <details className="raw-details">
+        <summary>展开最近帖子</summary>
+        <TweetList tweets={builder.tweets.slice(0, 8)} />
+      </details>
     </article>
   );
 }
 
-function PodcastCard({
-  episode
-}: {
-  episode: PodcastEpisodeViewRecord;
-}) {
+function PodcastCard({ episode }: { episode: PodcastEpisodeViewRecord }) {
   return (
     <article className="content-card">
       <div className="content-card-head">
@@ -243,94 +165,192 @@ function PodcastCard({
       <SummaryBox
         summaryZh={episode.summaryZh}
         status={episode.summaryStatus}
-        emptyLabel="摘要生成中，下次同步后会出现中文摘要。"
+        emptyLabel="播客摘要生成中，下次同步后会出现。"
       />
 
       <details className="raw-details">
         <summary>Transcript</summary>
         <div className="raw-content">
-          <p>{truncate(episode.transcript, 900)}</p>
+          <p>{truncate(episode.transcript, 1000)}</p>
         </div>
       </details>
     </article>
   );
 }
 
-function DigestPanel({
-  digest
-}: {
-  digest: DigestRecord | null;
-}) {
-  const digestLines = summarizeDigest(digest);
+function BlogCard({ post }: { post: BlogPostViewRecord }) {
+  return (
+    <article className="content-card">
+      <div className="content-card-head">
+        <div>
+          <p className="section-kicker">{post.blogName}</p>
+          <h3>{post.title}</h3>
+        </div>
+        <a href={post.url} rel="noreferrer" target="_blank">
+          打开原文
+        </a>
+      </div>
 
+      <p className="meta-line">
+        {post.author ? `${post.author} · ` : ''}
+        {formatDateTime(post.publishedAt)}
+      </p>
+
+      <SummaryBox
+        summaryZh={post.summaryZh}
+        status={post.summaryStatus}
+        emptyLabel="博客摘要生成中，下次同步后会出现。"
+      />
+
+      <details className="raw-details">
+        <summary>文章片段</summary>
+        <div className="raw-content">
+          <p>{truncate(post.content || post.description, 1200)}</p>
+        </div>
+      </details>
+    </article>
+  );
+}
+
+// Parse inline markdown: **bold** and [text](url)
+function parseInline(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  const re = /(\*\*(.+?)\*\*|\[([^\]]+)\]\((https?:\/\/[^)]+)\))/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > last) parts.push(text.slice(last, match.index));
+    if (match[2] !== undefined) {
+      parts.push(<strong key={match.index}>{match[2]}</strong>);
+    } else if (match[3] !== undefined && match[4] !== undefined) {
+      parts.push(<a key={match.index} href={match[4]} target="_blank" rel="noopener noreferrer">{match[3]}</a>);
+    }
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
+
+// Strip surrounding ** so pattern matching works regardless of bold wrapping
+function stripBold(text: string) {
+  return text.replace(/^\*\*(.+)\*\*$/, '$1');
+}
+
+function renderDigestLine(line: string, index: number) {
+  if (!line.trim()) {
+    return <div aria-hidden="true" className="digest-spacer" key={`spacer-${index}`} />;
+  }
+
+  const bare = stripBold(line.trim());
+
+  if (bare.startsWith('AI Builders Digest｜')) {
+    return (
+      <div className="digest-line digest-line-title" key={index}>
+        {parseInline(line)}
+      </div>
+    );
+  }
+
+  if (/^\d+）/.test(bare)) {
+    return (
+      <div className="digest-line digest-line-section" key={index}>
+        {parseInline(bare)}
+      </div>
+    );
+  }
+
+  if (line.startsWith('• ') || line.startsWith('- ')) {
+    return (
+      <div className="digest-line digest-line-topic" key={index}>
+        {parseInline(line)}
+      </div>
+    );
+  }
+
+  // Markdown link on its own line → render as link line
+  if (/^\[.+\]\(https?:\/\/.+\)$/.test(line.trim())) {
+    return (
+      <div className="digest-line digest-line-link" key={index}>
+        {parseInline(line)}
+      </div>
+    );
+  }
+
+  if (line.startsWith('原文：') || line.startsWith('链接：')) {
+    return (
+      <div className="digest-line digest-line-link" key={index}>
+        {parseInline(line)}
+      </div>
+    );
+  }
+
+  if (bare.startsWith('结论：')) {
+    return (
+      <div className="digest-line digest-line-conclusion" key={index}>
+        {parseInline(line)}
+      </div>
+    );
+  }
+
+  return (
+    <div className="digest-line" key={index}>
+      {parseInline(line)}
+    </div>
+  );
+}
+
+function DigestPanel({ digest }: { digest: DigestRecord | null }) {
   return (
     <section className="workspace-panel">
       <div className="workspace-head">
         <div>
           <p className="section-kicker">Digest</p>
-          <h2>今日摘要</h2>
-          <p className="workspace-note">只保留概览，需要时再展开全文。</p>
+          <h2>AI Builders Digest</h2>
+          <p className="workspace-note">直接展示完整 digest，不再做概览摘要。</p>
         </div>
       </div>
 
       <article className="content-card">
-        {digestLines.length > 0 ? (
-          <ul className="digest-summary-list">
-            {digestLines.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
+        {digest?.content ? (
+          <div className="digest-card">
+            {digest.content.split('\n').map((line, index) => renderDigestLine(line, index))}
+          </div>
         ) : (
           <p className="empty-state">还没有 digest。先执行一次同步。</p>
         )}
-
-        {digest?.content ? (
-          <details className="raw-details">
-            <summary>完整 digest</summary>
-            <pre className="digest-card">{digest.content}</pre>
-          </details>
-        ) : null}
       </article>
     </section>
   );
 }
 
-export function DashboardShell({
-  dashboard
-}: {
-  dashboard: DashboardData;
-}) {
-  const [activeTab, setActiveTab] = useState<TabKey>('builders');
+export function DashboardShell({ dashboard }: { dashboard: DashboardData }) {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<TabKey>('digest');
   const [builderSearch, setBuilderSearch] = useState('');
   const [selectedBuilder, setSelectedBuilder] = useState<string>('all');
-  const deferredSearch = useDeferredValue(builderSearch);
+  const [syncState, setSyncState] = useState<{
+    phase: 'idle' | 'running' | 'done' | 'error';
+    message: string | null;
+  }>({
+    phase: 'idle',
+    message: null
+  });
 
-  const builderGroups = groupTweetsByBuilder(dashboard.recentTweets);
+  const deferredSearch = useDeferredValue(builderSearch);
   const normalizedQuery = deferredSearch.trim().toLowerCase();
-  const filteredGroups = normalizedQuery
-    ? builderGroups.filter((group) => {
+  const filteredBuilders = normalizedQuery
+    ? dashboard.recentBuilders.filter((builder) => {
         return (
-          group.name.toLowerCase().includes(normalizedQuery) ||
-          group.handle.toLowerCase().includes(normalizedQuery)
+          builder.name.toLowerCase().includes(normalizedQuery) ||
+          builder.handle.toLowerCase().includes(normalizedQuery)
         );
       })
-    : builderGroups;
+    : dashboard.recentBuilders;
 
-  const effectiveSelectedBuilder =
-    selectedBuilder !== 'all' && filteredGroups.some((group) => group.handle === selectedBuilder)
-      ? selectedBuilder
-      : 'all';
-
-  const selectedGroup =
-    effectiveSelectedBuilder === 'all'
-      ? null
-      : filteredGroups.find((group) => group.handle === effectiveSelectedBuilder) ?? null;
-
-  const visibleTweetCount = filteredGroups.reduce((count, group) => count + group.tweets.length, 0);
-  const feedTweets = (selectedGroup ? selectedGroup.tweets : filteredGroups.flatMap((group) => group.tweets))
-    .slice()
-    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-  const feedSections = buildFeedSections(feedTweets);
+  const visibleBuilders =
+    selectedBuilder === 'all'
+      ? filteredBuilders
+      : filteredBuilders.filter((builder) => builder.handle === selectedBuilder);
 
   function changeTab(tab: TabKey) {
     startTransition(() => {
@@ -344,29 +364,90 @@ export function DashboardShell({
     });
   }
 
+  async function triggerSync() {
+    if (syncState.phase === 'running') {
+      return;
+    }
+
+    setSyncState({
+      phase: 'running',
+      message: '正在同步 Zara 的公开 feed，请稍候。'
+    });
+
+    try {
+      const response = await fetch('/api/sync', {
+        method: 'POST'
+      });
+      const payload = (await response.json()) as {
+        status?: string;
+        message?: string;
+      };
+
+      if (!response.ok && response.status !== 202) {
+        throw new Error(payload.message || '手动同步失败');
+      }
+
+      setSyncState({
+        phase: 'done',
+        message: payload.message ?? '同步完成。'
+      });
+
+      startTransition(() => {
+        router.refresh();
+      });
+    } catch (error) {
+      setSyncState({
+        phase: 'error',
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="app-header">
         <div>
           <p className="section-kicker">Follow Builders Local Hub</p>
-          <h1>Builders Feed</h1>
-          <p className="app-subtitle">中文摘要优先，按时间刷完，再决定是否点开原文。</p>
+          <h1>AI Builders Digest</h1>
+          <p className="app-subtitle">feed 和 prompt 都按 Zara 开源仓库对齐，本地只做同步、存储和展示。</p>
         </div>
 
         <div className="header-status">
           <span className="status-chip">{formatSyncStatus(dashboard.latestSync?.status)}</span>
           <p>远端 feed: {formatDateTime(dashboard.latestSync?.feedGeneratedAt ?? null)}</p>
           <p>本地同步: {formatDateTime(dashboard.latestSync?.finishedAt ?? null)}</p>
+          <div className="header-actions">
+            <button
+              className="primary-action"
+              disabled={syncState.phase === 'running'}
+              onClick={() => {
+                void triggerSync();
+              }}
+              type="button"
+            >
+              {syncState.phase === 'running' ? '同步中...' : '立即同步'}
+            </button>
+            {syncState.message ? (
+              <p
+                className={
+                  syncState.phase === 'error' ? 'secondary-note is-error' : 'secondary-note'
+                }
+              >
+                {syncState.message}
+              </p>
+            ) : null}
+          </div>
         </div>
       </header>
 
       <div className="app-layout">
         <aside className="nav-column">
-          <section className="sidebar-panel">
+          <section className="sidebar-panel" style={{ animation: 'fadeSlideUp 500ms ease both', animationDelay: '150ms' }}>
             <p className="section-kicker">Views</p>
             <div className="view-list" role="tablist" aria-label="dashboard tabs">
               <button
                 className={activeTab === 'builders' ? 'view-button is-active' : 'view-button'}
+                aria-selected={activeTab === 'builders'}
                 onClick={() => changeTab('builders')}
                 role="tab"
                 type="button"
@@ -374,7 +455,17 @@ export function DashboardShell({
                 Builders
               </button>
               <button
+                className={activeTab === 'blogs' ? 'view-button is-active' : 'view-button'}
+                aria-selected={activeTab === 'blogs'}
+                onClick={() => changeTab('blogs')}
+                role="tab"
+                type="button"
+              >
+                Blogs
+              </button>
+              <button
                 className={activeTab === 'podcasts' ? 'view-button is-active' : 'view-button'}
+                aria-selected={activeTab === 'podcasts'}
                 onClick={() => changeTab('podcasts')}
                 role="tab"
                 type="button"
@@ -383,6 +474,7 @@ export function DashboardShell({
               </button>
               <button
                 className={activeTab === 'digest' ? 'view-button is-active' : 'view-button'}
+                aria-selected={activeTab === 'digest'}
                 onClick={() => changeTab('digest')}
                 role="tab"
                 type="button"
@@ -393,13 +485,13 @@ export function DashboardShell({
           </section>
 
           {activeTab === 'builders' ? (
-            <section className="sidebar-panel">
+            <section className="sidebar-panel" style={{ animation: 'fadeSlideUp 500ms ease both', animationDelay: '250ms' }}>
               <div className="sidebar-head">
                 <div>
                   <p className="section-kicker">Builders</p>
                   <h2>作者筛选</h2>
                 </div>
-                <span className="sidebar-count">{filteredGroups.length}</span>
+                <span className="sidebar-count">{filteredBuilders.length}</span>
               </div>
 
               <label className="sidebar-search">
@@ -414,41 +506,43 @@ export function DashboardShell({
 
               <div className="builder-list" role="list">
                 <button
-                  className={effectiveSelectedBuilder === 'all' ? 'builder-button is-active' : 'builder-button'}
+                  className={selectedBuilder === 'all' ? 'builder-button is-active' : 'builder-button'}
                   onClick={() => selectBuilder('all')}
                   type="button"
                 >
                   <span>全部作者</span>
-                  <span>{visibleTweetCount}</span>
+                  <span>{filteredBuilders.length}</span>
                 </button>
 
-                {filteredGroups.map((group) => (
+                {filteredBuilders.map((builder) => (
                   <button
                     className={
-                      effectiveSelectedBuilder === group.handle
+                      selectedBuilder === builder.handle
                         ? 'builder-button is-active'
                         : 'builder-button'
                     }
-                    key={group.handle}
-                    onClick={() => selectBuilder(group.handle)}
+                    key={builder.handle}
+                    onClick={() => selectBuilder(builder.handle)}
                     type="button"
                   >
                     <span>
-                      {group.name}
-                      <small>@{group.handle}</small>
+                      {builder.name}
+                      <small>@{builder.handle}</small>
                     </span>
-                    <span>{group.count}</span>
+                    <span>{builder.tweetCount}</span>
                   </button>
                 ))}
               </div>
             </section>
           ) : (
-            <section className="sidebar-panel">
+            <section className="sidebar-panel" style={{ animation: 'fadeSlideUp 500ms ease both', animationDelay: '250ms' }}>
               <p className="section-kicker">Mode</p>
               <p className="sidebar-note">
-                {activeTab === 'podcasts'
-                  ? '先扫中文摘要，再决定是否展开 transcript。'
-                  : 'Digest 只保留概览，完整内容按需展开。'}
+                {activeTab === 'blogs'
+                  ? '博客和播客按上游 prompt 摘要。'
+                  : activeTab === 'podcasts'
+                    ? '先看 remix，再决定是否展开 transcript。'
+                    : 'Digest 直接按 Zara 的三段式输出。'}
               </p>
             </section>
           )}
@@ -459,36 +553,43 @@ export function DashboardShell({
             <section className="workspace-panel">
               <div className="workspace-head">
                 <div>
-                  <p className="section-kicker">Feed</p>
-                  <h2>{selectedGroup ? selectedGroup.name : '推文流'}</h2>
-                  <p className="workspace-note">
-                    {selectedGroup
-                      ? `@${selectedGroup.handle} · ${selectedGroup.count} 条，按北京时间从早到晚。`
-                      : `全部作者 · ${feedTweets.length} 条，按北京时间从早到晚。`}
-                  </p>
+                  <p className="section-kicker">Builders</p>
+                  <h2>{selectedBuilder === 'all' ? 'Builder 摘要流' : visibleBuilders[0]?.name ?? 'Builder'}</h2>
+                  <p className="workspace-note">每个 builder 一段摘要，下面挂它这轮 feed 里的原帖。</p>
                 </div>
               </div>
 
-              {feedSections.length > 0 ? (
-                <div className="feed-sections">
-                  {feedSections.map((section) => (
-                    <section className="day-section" key={section.key}>
-                      <div className="day-divider">
-                        <span>{section.label}</span>
-                      </div>
-                      <div className="feed-list">
-                        {section.tweets.map((tweet) => (
-                          <TweetRow key={tweet.id} tweet={tweet} />
-                        ))}
-                      </div>
-                    </section>
-                  ))}
+              <div className="content-list">
+                {visibleBuilders.length > 0 ? (
+                  visibleBuilders.map((builder) => <BuilderCard builder={builder} key={builder.handle} />)
+                ) : (
+                  <div className="empty-panel">
+                    <p className="empty-state">当前没有匹配的 builder 内容。</p>
+                  </div>
+                )}
+              </div>
+            </section>
+          ) : null}
+
+          {activeTab === 'blogs' ? (
+            <section className="workspace-panel">
+              <div className="workspace-head">
+                <div>
+                  <p className="section-kicker">Blogs</p>
+                  <h2>官方博客</h2>
+                  <p className="workspace-note">Anthropic Engineering / Claude Blog 等官方更新。</p>
                 </div>
-              ) : (
-                <div className="empty-panel">
-                  <p className="empty-state">当前没有匹配的 builder 内容。</p>
-                </div>
-              )}
+              </div>
+
+              <div className="content-list">
+                {dashboard.recentBlogs.length > 0 ? (
+                  dashboard.recentBlogs.map((post) => <BlogCard key={post.url} post={post} />)
+                ) : (
+                  <div className="empty-panel">
+                    <p className="empty-state">当前远端 blogs feed 没有新文章。</p>
+                  </div>
+                )}
+              </div>
             </section>
           ) : null}
 
@@ -497,8 +598,8 @@ export function DashboardShell({
               <div className="workspace-head">
                 <div>
                   <p className="section-kicker">Podcasts</p>
-                  <h2>播客摘要</h2>
-                  <p className="workspace-note">先看中文摘要，需要时再展开 transcript。</p>
+                  <h2>播客 remix</h2>
+                  <p className="workspace-note">按 Zara 的 podcast remix prompt 输出。</p>
                 </div>
               </div>
 
@@ -534,6 +635,10 @@ export function DashboardShell({
                 <dt>新增播客</dt>
                 <dd>{dashboard.latestSync?.newPodcastEpisodes ?? 0}</dd>
               </div>
+              <div>
+                <dt>新增博客</dt>
+                <dd>{dashboard.latestSync?.newBlogPosts ?? 0}</dd>
+              </div>
             </dl>
           </section>
 
@@ -552,6 +657,10 @@ export function DashboardShell({
               <div>
                 <dt>Podcasts</dt>
                 <dd>{dashboard.overview.podcastEpisodes}</dd>
+              </div>
+              <div>
+                <dt>Blogs</dt>
+                <dd>{dashboard.overview.blogPosts}</dd>
               </div>
               <div>
                 <dt>Summaries</dt>
