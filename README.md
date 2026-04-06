@@ -1,5 +1,7 @@
 # Follow Builders Local Hub
 
+[中文](./README.zh.md) | English
+
 A local self-hosted hub that syncs the [follow-builders](https://github.com/zarazhangrui/follow-builders) public feed, generates AI summaries in Chinese, and delivers a daily digest to your Telegram.
 
 Feed sources, prompt design, and builder list all follow the upstream open-source repo. This project handles sync, storage, summarization, and display.
