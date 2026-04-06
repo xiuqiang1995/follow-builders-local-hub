@@ -1,0 +1,29 @@
+{
+  "databasePath": "./data/follow-builders.db",
+  "feeds": {
+    "xUrl": "https://raw.githubusercontent.com/zarazhangrui/follow-builders/main/feed-x.json",
+    "podcastsUrl": "https://raw.githubusercontent.com/zarazhangrui/follow-builders/main/feed-podcasts.json",
+    "blogsUrl": "https://raw.githubusercontent.com/zarazhangrui/follow-builders/main/feed-blogs.json"
+  },
+  "summaries": {
+    "enabled": true,
+    "locale": "zh-CN",
+    "summaryKind": "brief",
+    "promptVersion": "2026-03-25-zara-aligned-v1",
+    "tweetModel": "openrouter/free",
+    "podcastModel": "openrouter/free",
+    "blogModel": "openrouter/free",
+    "digestModel": "openrouter/free",
+    "maxTweetChars": 1800,
+    "maxPodcastChars": 40000,
+    "maxBlogChars": 30000,
+    "maxDigestChars": 12000
+  },
+  "openclaw": {
+    "mode": "none",
+    "channel": "telegram",
+    "target": "",
+    "account": "",
+    "enabled": false
+  }
+}
