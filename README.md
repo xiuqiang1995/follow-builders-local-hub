@@ -6,6 +6,12 @@ A local self-hosted hub that syncs the [follow-builders](https://github.com/zara
 
 Feed sources, prompt design, and builder list all follow the upstream open-source repo. This project handles sync, storage, summarization, and display.
 
+## Screenshots
+
+| Digest | Builders | Podcasts |
+|--------|----------|----------|
+| ![Digest](./docs/screenshots/digest.png) | ![Builders](./docs/screenshots/builders.png) | ![Podcasts](./docs/screenshots/podcasts.png) |
+
 ## What it does
 
 - Syncs X (Twitter) feeds, podcast episodes, and blog posts from the public follow-builders feed

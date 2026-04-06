@@ -6,6 +6,12 @@
 
 Feed 来源、prompt 设计、builder 名单全部对齐上游开源仓库，本项目只做同步、存储、摘要生成和展示。
 
+## 截图
+
+| Digest | Builders | Podcasts |
+|--------|----------|----------|
+| ![Digest](./docs/screenshots/digest.png) | ![Builders](./docs/screenshots/builders.png) | ![Podcasts](./docs/screenshots/podcasts.png) |
+
 ## 功能
 
 - 同步 X（Twitter）动态、播客、博客，来自 follow-builders 公开 feed
