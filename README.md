@@ -6,10 +6,6 @@ A local self-hosted hub that syncs the [follow-builders](https://github.com/zara
 
 Feed sources, prompt design, and builder list all follow the upstream open-source repo. This project handles sync, storage, summarization, and display.
 
-## Live Demo
-
-**[builders.purrcdn.com](https://builders.purrcdn.com)** — a live instance running on a Mac Mini M4.
-
 ## Screenshots
 
 | Digest | Builders | Podcasts |

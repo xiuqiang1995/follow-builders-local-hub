@@ -6,10 +6,6 @@
 
 Feed 来源、prompt 设计、builder 名单全部对齐上游开源仓库，本项目只做同步、存储、摘要生成和展示。
 
-## 在线 Demo
-
-**[builders.purrcdn.com](https://builders.purrcdn.com)** — 运行在 Mac Mini M4 上的真实实例。
-
 ## 截图
 
 | Digest | Builders | Podcasts |
