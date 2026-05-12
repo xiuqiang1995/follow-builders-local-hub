@@ -442,7 +442,7 @@ export function DashboardShell({ dashboard }: { dashboard: DashboardData }) {
 
       <div className="app-layout">
         <aside className="nav-column">
-          <section className="sidebar-panel" style={{ animation: 'fadeSlideUp 500ms ease both', animationDelay: '150ms' }}>
+          <section className="sidebar-panel">
             <p className="section-kicker">Views</p>
             <div className="view-list" role="tablist" aria-label="dashboard tabs">
               <button
@@ -485,7 +485,7 @@ export function DashboardShell({ dashboard }: { dashboard: DashboardData }) {
           </section>
 
           {activeTab === 'builders' ? (
-            <section className="sidebar-panel" style={{ animation: 'fadeSlideUp 500ms ease both', animationDelay: '250ms' }}>
+            <section className="sidebar-panel">
               <div className="sidebar-head">
                 <div>
                   <p className="section-kicker">Builders</p>
@@ -535,7 +535,7 @@ export function DashboardShell({ dashboard }: { dashboard: DashboardData }) {
               </div>
             </section>
           ) : (
-            <section className="sidebar-panel" style={{ animation: 'fadeSlideUp 500ms ease both', animationDelay: '250ms' }}>
+            <section className="sidebar-panel">
               <p className="section-kicker">Mode</p>
               <p className="sidebar-note">
                 {activeTab === 'blogs'
