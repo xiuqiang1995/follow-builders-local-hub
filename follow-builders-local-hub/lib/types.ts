@@ -2,6 +2,7 @@ export interface DashboardOverview {
   builders: number;
   tweets: number;
   podcastEpisodes: number;
+  blogPosts: number;
   digests: number;
   summaries: number;
   syncRuns: number;
@@ -32,6 +33,28 @@ export interface BuilderFeedEntry {
   name: string;
   bio: string;
   tweets: TweetRecord[];
+}
+
+export interface BuilderFeedViewRecord {
+  handle: string;
+  name: string;
+  bio: string;
+  tweetCount: number;
+  tweets: TweetRecord[];
+  summaryZh: string | null;
+  summaryStatus: SummaryStatus | null;
+}
+
+export interface BlogPostViewRecord {
+  url: string;
+  blogName: string;
+  title: string;
+  author: string | null;
+  publishedAt: string | null;
+  content: string;
+  description: string;
+  summaryZh: string | null;
+  summaryStatus: SummaryStatus | null;
 }
 
 export interface PodcastEpisodeRecord {
@@ -69,6 +92,7 @@ export interface SyncRunRecord {
   podcastEpisodes: number;
   newTweets: number;
   newPodcastEpisodes: number;
+  newBlogPosts?: number;
   message: string | null;
   digestId: number | null;
 }
@@ -155,7 +179,9 @@ export interface DashboardData {
   latestSync: SyncRunRecord | null;
   latestDigest: DigestRecord | null;
   recentTweets: TweetViewRecord[];
+  recentBuilders: BuilderFeedViewRecord[];
   recentPodcasts: PodcastEpisodeViewRecord[];
+  recentBlogs: BlogPostViewRecord[];
   recentDigests: DigestRecord[];
   topBuilders: TopBuilderRecord[];
   recentSyncRuns: SyncRunRecord[];

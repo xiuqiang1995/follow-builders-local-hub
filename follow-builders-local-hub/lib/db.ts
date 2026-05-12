@@ -3,7 +3,9 @@ import { dirname } from 'node:path';
 
 import { loadConfig } from './config';
 import type {
+  BlogPostViewRecord,
   BuilderFeedEntry,
+  BuilderFeedViewRecord,
   ContentSummaryRecord,
   DashboardData,
   DashboardOverview,
@@ -421,6 +423,7 @@ export async function getOverview(): Promise<DashboardOverview> {
       (SELECT COUNT(*) FROM builders) AS builders,
       (SELECT COUNT(*) FROM tweets) AS tweets,
       (SELECT COUNT(*) FROM podcast_episodes) AS podcastEpisodes,
+      0 AS blogPosts,
       (SELECT COUNT(*) FROM digests) AS digests,
       (SELECT COUNT(*) FROM content_summaries WHERE status = 'done') AS summaries,
       (SELECT COUNT(*) FROM sync_runs) AS syncRuns
@@ -619,13 +622,60 @@ export async function getRecentSyncRuns(limit = 10): Promise<SyncRunRecord[]> {
   `).all(limit) as unknown as SyncRunRecord[];
 }
 
+export async function getRecentBuilders(
+  builderLimit = 12,
+  tweetsPerBuilder = 8
+): Promise<BuilderFeedViewRecord[]> {
+  const db = await getDatabase();
+  const builders = db.prepare(`
+    SELECT
+      builders.handle AS handle,
+      builders.name AS name,
+      COALESCE(builders.bio, '') AS bio,
+      COUNT(tweets.id) AS tweetCount,
+      MAX(tweets.created_at) AS lastTweetAt
+    FROM builders
+    INNER JOIN tweets ON tweets.builder_handle = builders.handle
+    GROUP BY builders.handle, builders.name, builders.bio
+    ORDER BY datetime(lastTweetAt) DESC
+    LIMIT ?
+  `).all(builderLimit) as Array<{
+    handle: string;
+    name: string;
+    bio: string;
+    tweetCount: number;
+    lastTweetAt: string;
+  }>;
+
+  const result: BuilderFeedViewRecord[] = [];
+  for (const row of builders) {
+    const tweets = await getRecentTweets(tweetsPerBuilder, row.handle);
+    result.push({
+      handle: row.handle,
+      name: row.name,
+      bio: row.bio,
+      tweetCount: row.tweetCount,
+      tweets: tweets.map(({ summaryZh: _z, summaryStatus: _s, summaryUpdatedAt: _u, ...rest }) => rest),
+      summaryZh: null,
+      summaryStatus: null
+    });
+  }
+  return result;
+}
+
+export async function getRecentBlogs(): Promise<BlogPostViewRecord[]> {
+  return [];
+}
+
 export async function getDashboardData(): Promise<DashboardData> {
   const [
     overview,
     latestSync,
     latestDigest,
     recentTweets,
+    recentBuilders,
     recentPodcasts,
+    recentBlogs,
     recentDigests,
     topBuilders,
     recentSyncRuns
@@ -634,7 +684,9 @@ export async function getDashboardData(): Promise<DashboardData> {
     getLatestSyncRun(),
     getLatestDigest(),
     getRecentTweets(40),
+    getRecentBuilders(12, 8),
     getRecentPodcastEpisodes(12),
+    getRecentBlogs(),
     getRecentDigests(12),
     getTopBuilders(12),
     getRecentSyncRuns(12)
@@ -645,7 +697,9 @@ export async function getDashboardData(): Promise<DashboardData> {
     latestSync,
     latestDigest,
     recentTweets,
+    recentBuilders,
     recentPodcasts,
+    recentBlogs,
     recentDigests,
     topBuilders,
     recentSyncRuns
